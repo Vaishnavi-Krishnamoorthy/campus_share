@@ -7,6 +7,12 @@ import { AuthPayload, Student } from '../types/index.js';
 
 export const register = async (req: Request, res: Response): Promise<void> => {
   try {
+    const jwtSecret = process.env.JWT_SECRET;
+    if (!jwtSecret) {
+      res.status(500).json({ success: false, message: 'Authentication is not configured.' });
+      return;
+    }
+
     const { name, email, password, student_number, department, year, phone } = req.body;
 
     if (!name || !email || !password || !student_number || !department || !year) {
@@ -70,11 +76,6 @@ export const register = async (req: Request, res: Response): Promise<void> => {
       role: 'STUDENT'
     };
 
-    const jwtSecret = process.env.JWT_SECRET;
-    if (!jwtSecret) {
-      throw new Error('JWT_SECRET is not configured.');
-    }
-
     const token = jwt.sign(
       payload,
       jwtSecret,
@@ -95,6 +96,12 @@ export const register = async (req: Request, res: Response): Promise<void> => {
 
 export const login = async (req: Request, res: Response): Promise<void> => {
   try {
+    const jwtSecret = process.env.JWT_SECRET;
+    if (!jwtSecret) {
+      res.status(500).json({ success: false, message: 'Authentication is not configured.' });
+      return;
+    }
+
     const { email, password } = req.body;
 
     if (!email || !password) {
@@ -128,11 +135,6 @@ export const login = async (req: Request, res: Response): Promise<void> => {
       department: student.department,
       role: student.role
     };
-
-    const jwtSecret = process.env.JWT_SECRET;
-    if (!jwtSecret) {
-      throw new Error('JWT_SECRET is not configured.');
-    }
 
     const token = jwt.sign(
       payload,

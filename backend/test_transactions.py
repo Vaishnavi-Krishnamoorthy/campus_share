@@ -1,99 +1,115 @@
-import urllib.request
 import json
+import os
 import sys
+import urllib.error
+import urllib.request
+from datetime import date, timedelta
 
-base_url = 'http://localhost:5000'
 
-def post_json(endpoint, data, token=None):
-    req = urllib.request.Request(
+base_url = os.environ.get('CAMPUS_SHARE_API_URL', 'http://localhost:5000').rstrip('/')
+borrower_email = os.environ.get('CAMPUS_SHARE_TEST_BORROWER_EMAIL')
+owner_email = os.environ.get('CAMPUS_SHARE_TEST_OWNER_EMAIL')
+password = os.environ.get('CAMPUS_SHARE_TEST_PASSWORD')
+resource_id = os.environ.get('CAMPUS_SHARE_TEST_RESOURCE_ID')
+
+
+def request_json(method, endpoint, data=None, token=None):
+    headers = {'Content-Type': 'application/json'}
+    if token:
+        headers['Authorization'] = f'Bearer {token}'
+    body = json.dumps(data or {}).encode('utf-8') if method != 'GET' else None
+    request = urllib.request.Request(
         base_url + endpoint,
-        data=json.dumps(data).encode('utf-8'),
-        headers={
-            'Content-Type': 'application/json',
-            **({'Authorization': f'Bearer {token}'} if token else {})
-        },
-        method='POST'
+        data=body,
+        headers=headers,
+        method=method
     )
-    with urllib.request.urlopen(req) as resp:
-        return json.loads(resp.read().decode())
+    with urllib.request.urlopen(request, timeout=10) as response:
+        return json.loads(response.read().decode())
 
-def put_json(endpoint, data={}, token=None):
-    req = urllib.request.Request(
-        base_url + endpoint,
-        data=json.dumps(data).encode('utf-8'),
-        headers={
-            'Content-Type': 'application/json',
-            **({'Authorization': f'Bearer {token}'} if token else {})
-        },
-        method='PUT'
+
+def assert_success(response, operation):
+    if response.get('success') is not True:
+        raise AssertionError(f'{operation} failed: {response}')
+
+
+def main():
+    if not all((borrower_email, owner_email, password, resource_id)):
+        raise ValueError(
+            'Set CAMPUS_SHARE_TEST_BORROWER_EMAIL, CAMPUS_SHARE_TEST_OWNER_EMAIL, '
+            'CAMPUS_SHARE_TEST_PASSWORD, and CAMPUS_SHARE_TEST_RESOURCE_ID to '
+            'existing seeded test data before running transaction tests.'
+        )
+
+    print('[TEST 1] Logging in borrower and resource owner...')
+    borrower_login = request_json(
+        'POST', '/api/auth/login', {'email': borrower_email, 'password': password}
     )
-    with urllib.request.urlopen(req) as resp:
-        return json.loads(resp.read().decode())
-
-def get_json(endpoint, token=None):
-    req = urllib.request.Request(
-        base_url + endpoint,
-        headers={**({'Authorization': f'Bearer {token}'} if token else {})}
+    owner_login = request_json(
+        'POST', '/api/auth/login', {'email': owner_email, 'password': password}
     )
-    with urllib.request.urlopen(req) as resp:
-        return json.loads(resp.read().decode())
+    assert_success(borrower_login, 'Borrower login')
+    assert_success(owner_login, 'Owner login')
+    borrower_token = borrower_login['token']
+    owner_token = owner_login['token']
 
-print("[TEST 1] Testing Login for Priya and Rahul...")
-priya_login = post_json('/api/auth/login', {'email': 'priya.sharma@campusshare.edu', 'password': 'Password123!'})
-rahul_login = post_json('/api/auth/login', {'email': 'rahul.mehta@campusshare.edu', 'password': 'Password123!'})
-priya_token = priya_login['token']
-rahul_token = rahul_login['token']
-print(f" -> Logged in Priya (ID {priya_login['user']['student_id']}) & Rahul (ID {rahul_login['user']['student_id']})")
+    print('[TEST 2] Creating a borrow request...')
+    today = date.today()
+    request_response = request_json('POST', '/api/requests', {
+        'resource_id': int(resource_id),
+        'requested_from': (today + timedelta(days=1)).isoformat(),
+        'requested_until': (today + timedelta(days=8)).isoformat(),
+        'purpose': 'CampusShare transaction integration test',
+        'message': 'Automated test request'
+    }, borrower_token)
+    assert_success(request_response, 'Create request')
+    request_id = request_response['request_id']
 
-print("\n[TEST 2] Priya requests to borrow Rahul's resource (ID 2)...")
-req_data = {
-    'resource_id': 2,
-    'requested_from': '2026-09-23',
-    'requested_until': '2026-09-30',
-    'purpose': 'Calculus exam preparation',
-    'message': 'Can I borrow your Maths book for a week?'
-}
-create_req = post_json('/api/requests', req_data, token=priya_token)
-req_id = create_req['request_id']
-print(f" -> Request created: ID {req_id}")
+    print('[TEST 3] Approving request and verifying resource state...')
+    approval = request_json(
+        'PUT', f'/api/requests/{request_id}/approve', token=owner_token
+    )
+    assert_success(approval, 'Approve request')
+    borrowing_id = approval['data']['borrowing_id']
+    resource = request_json('GET', f'/api/resources/{resource_id}')
+    if resource['resource']['availability_status'] != 'BORROWED':
+        raise AssertionError('Resource was not marked BORROWED after approval.')
 
-print("\n[TEST 3] Rahul approves request via MySQL ACID Transaction...")
-approve_res = put_json(f'/api/requests/{req_id}/approve', {}, token=rahul_token)
-borrowing_id = approve_res['data']['borrowing_id']
-print(f" -> Approval Transaction committed! New Borrowing ID: {borrowing_id}")
+    print('[TEST 4] Returning resource and verifying availability...')
+    returned = request_json(
+        'PUT', f'/api/borrowings/{borrowing_id}/return', token=borrower_token
+    )
+    assert_success(returned, 'Return resource')
+    resource = request_json('GET', f'/api/resources/{resource_id}')
+    if resource['resource']['availability_status'] != 'AVAILABLE':
+        raise AssertionError('Resource was not marked AVAILABLE after return.')
 
-print("\n[TEST 4] Verify Resource availability updated to BORROWED...")
-res_detail = get_json('/api/resources/2')
-print(f" -> Resource 2 status: {res_detail['resource']['availability_status']}")
-assert res_detail['resource']['availability_status'] == 'BORROWED'
-
-print("\n[TEST 5] Priya returns resource via MySQL ACID Return Transaction...")
-return_res = put_json(f'/api/borrowings/{borrowing_id}/return', {}, token=priya_token)
-print(f" -> Return Transaction committed! Status: {return_res['data']['status']}")
-
-print("\n[TEST 6] Verify Resource availability updated back to AVAILABLE...")
-res_detail_after = get_json('/api/resources/2')
-print(f" -> Resource 2 status: {res_detail_after['resource']['availability_status']}")
-assert res_detail_after['resource']['availability_status'] == 'AVAILABLE'
-
-print("\n[TEST 7] Priya leaves a 5-star review...")
-review_res = post_json('/api/reviews', {
-    'borrowing_id': borrowing_id,
-    'rating': 5,
-    'comment': 'Awesome book, notes were super helpful. Returned on time!'
-}, token=priya_token)
-print(f" -> Review recorded: ID {review_res['review_id']}")
-
-print("\n[TEST 8] Verify duplicate review prevention...")
-try:
-    post_json('/api/reviews', {
+    print('[TEST 5] Creating a review and verifying duplicate rejection...')
+    review = request_json('POST', '/api/reviews', {
         'borrowing_id': borrowing_id,
-        'rating': 4,
-        'comment': 'Duplicate try'
-    }, token=priya_token)
-    print(" -> ERROR: Duplicate review was unexpectedly allowed!")
-    sys.exit(1)
-except Exception as e:
-    print(f" -> SUCCESS: Duplicate review correctly rejected: {e}")
+        'rating': 5,
+        'comment': 'Automated transaction integration test'
+    }, borrower_token)
+    assert_success(review, 'Create review')
 
-print("\n[SUCCESS] ALL BACKEND ACID TRANSACTIONS AND CONSTRAINTS FULLY VERIFIED ON MYSQL!")
+    try:
+        request_json('POST', '/api/reviews', {
+            'borrowing_id': borrowing_id,
+            'rating': 4,
+            'comment': 'Duplicate review attempt'
+        }, borrower_token)
+    except urllib.error.HTTPError as error:
+        if error.code != 409:
+            raise
+    else:
+        raise AssertionError('A duplicate review was unexpectedly accepted.')
+
+    print('[SUCCESS] Borrow request, approval, return, and review checks passed.')
+
+
+if __name__ == '__main__':
+    try:
+        main()
+    except (AssertionError, KeyError, OSError, ValueError, urllib.error.HTTPError) as error:
+        print(f'[FAILURE] {error}', file=sys.stderr)
+        sys.exit(1)

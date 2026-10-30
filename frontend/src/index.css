@@ -8,6 +8,8 @@
     --text-main: #0f172a;
     --card-bg: #ffffff;
     --card-border: #e2e8f0;
+    --bg-glow-primary: rgba(99, 102, 241, 0.13);
+    --bg-glow-secondary: rgba(56, 189, 248, 0.08);
   }
 
   .dark {
@@ -15,6 +17,8 @@
     --text-main: #f1f5f9;
     --card-bg: #111827;
     --card-border: #1f2937;
+    --bg-glow-primary: rgba(99, 102, 241, 0.2);
+    --bg-glow-secondary: rgba(56, 189, 248, 0.1);
   }
 
   .theme-emerald {
@@ -22,6 +26,8 @@
     --text-main: #064e3b;
     --card-bg: #ffffff;
     --card-border: #bbf7d0;
+    --bg-glow-primary: rgba(16, 185, 129, 0.12);
+    --bg-glow-secondary: rgba(20, 184, 166, 0.08);
   }
 
   .theme-cyberpunk {
@@ -29,6 +35,8 @@
     --text-main: #f5f3ff;
     --card-bg: #150d2e;
     --card-border: #2e1d5e;
+    --bg-glow-primary: rgba(139, 92, 246, 0.22);
+    --bg-glow-secondary: rgba(217, 70, 239, 0.12);
   }
 
   body {
@@ -127,18 +135,10 @@
 /* Gradient Mesh backgrounds for light & dark */
 .gradient-mesh {
   background-color: var(--bg-main);
-  background-image: 
-    radial-gradient(at 0% 0%, rgba(99, 102, 241, 0.12) 0px, transparent 50%),
-    radial-gradient(at 100% 0%, rgba(139, 92, 246, 0.10) 0px, transparent 50%),
-    radial-gradient(at 50% 50%, rgba(236, 72, 153, 0.05) 0px, transparent 50%);
-}
-
-.dark .gradient-mesh {
-  background-color: #0b0f19;
-  background-image: 
-    radial-gradient(at 0% 0%, rgba(99, 102, 241, 0.20) 0px, transparent 50%),
-    radial-gradient(at 100% 0%, rgba(139, 92, 246, 0.16) 0px, transparent 50%),
-    radial-gradient(at 50% 50%, rgba(236, 72, 153, 0.08) 0px, transparent 50%);
+  background-image:
+    radial-gradient(ellipse at 8% 0%, var(--bg-glow-primary) 0px, transparent 42%),
+    radial-gradient(ellipse at 92% 18%, var(--bg-glow-secondary) 0px, transparent 38%);
+  background-attachment: fixed;
 }
 
 .glass-card {

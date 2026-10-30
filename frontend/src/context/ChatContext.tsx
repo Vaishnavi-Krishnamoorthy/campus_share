@@ -185,6 +185,8 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const peersSeen = new Set<number>();
 
   allMessages.forEach((m) => {
+    if (m.senderId !== currentUserId && m.recipientId !== currentUserId) return;
+
     const peerId = m.senderId === currentUserId ? m.recipientId : m.senderId;
     if (!peersSeen.has(peerId)) {
       peersSeen.add(peerId);
@@ -197,6 +199,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
           (t.senderId === peerId && t.recipientId === currentUserId)
       );
       const last = thread[thread.length - 1];
+      if (!last) return;
       const unreads = thread.filter((t) => t.recipientId === currentUserId && !t.isRead).length;
 
       conversations.push({

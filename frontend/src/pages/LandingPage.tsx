@@ -69,7 +69,7 @@ export const LandingPage: React.FC = () => {
     <div className="flex flex-col min-h-screen">
       
       {/* 1. HERO SECTION WITH AMBIENT GLOW */}
-      <section className="relative overflow-hidden bg-gradient-to-b from-indigo-50/50 via-white to-slate-50/50 border-b border-slate-200/60 pt-8 pb-16 lg:py-24">
+      <section className="landing-hero relative overflow-hidden border-b border-indigo-100/80 pt-8 pb-16 lg:py-24">
         <div className="subtle-grid absolute inset-0 opacity-40"></div>
         <div className="relative mx-auto grid max-w-7xl items-center gap-12 px-4 sm:px-6 lg:grid-cols-12 lg:px-8">
           
